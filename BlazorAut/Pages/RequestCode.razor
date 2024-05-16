@@ -1,7 +1,7 @@
 ﻿@page "/request-code"
 @inject IEmailService EmailService
-@inject NavigationManager Navigation
 @inject BlazorAut.Data.ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @using System.ComponentModel.DataAnnotations
 @using BlazorAut.Services
 @using BlazorAut.Data
@@ -37,10 +37,27 @@ else
     </EditForm>
 }
 
+<div>
+    <h4>Authentication State</h4>
+    <p>User Identity: @(authenticationState?.User?.Identity?.Name ?? "Anonymous")</p>
+    <p>Is Authenticated: @(authenticationState?.User?.Identity?.IsAuthenticated ?? false)</p>
+</div>
+
+@if (isCodeVerified)
+{
+    <div>
+        <p>Code verified successfully</p>
+        <p>User Email: @authenticatedEmail</p>
+    </div>
+}
+
 @code {
     private EmailModel emailModel = new();
     private CodeModel codeModel = new();
     private bool isCodeSent = false;
+    private bool isCodeVerified = false;
+    private string authenticatedEmail;
+    private AuthenticationState authenticationState;
 
     public class EmailModel
     {
@@ -53,6 +70,13 @@ else
     {
         [Required]
         public string Code { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        Console.WriteLine($"User Identity: {authenticationState.User.Identity.Name}");
+        Console.WriteLine($"Is Authenticated: {authenticationState.User.Identity.IsAuthenticated}");
     }
 
     private async Task HandleRequestCode()
@@ -91,7 +115,11 @@ else
         if (authCode != null && authCode.Code == codeModel.Code && authCode.Expiration > DateTime.UtcNow)
         {
             Console.WriteLine("Code verified successfully");
-            // Here you can set the authentication state or redirect the user
+            ((CustomAuthenticationStateProvider)AuthenticationStateProvider).MarkUserAsAuthenticated(emailModel.Email);
+            authenticatedEmail = emailModel.Email;
+            isCodeVerified = true;
+            authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            StateHasChanged(); // Force a re-render to update the UI
         }
         else
         {

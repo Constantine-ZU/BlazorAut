@@ -1,4 +1,5 @@
 ﻿@inherits LayoutComponentBase
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>BlazorAut</PageTitle>
 
@@ -9,7 +10,17 @@
 
     <main>
         <div class="top-row px-4">
-            <a href="https://docs.microsoft.com/aspnet/" target="_blank">About</a>
+            <AuthorizeView>
+                <Authorized>
+                    @if (authenticationState != null && authenticationState.User.Identity.IsAuthenticated)
+                    {
+                        <span>Welcome, @authenticationState.User.Identity.Name</span>
+                    }
+                </Authorized>
+                <NotAuthorized>
+                    <a href="/request-code">Login</a>
+                </NotAuthorized>
+            </AuthorizeView>
         </div>
 
         <article class="content px-4">
@@ -17,3 +28,13 @@
         </article>
     </main>
 </div>
+
+@code {
+    private AuthenticationState authenticationState;
+
+    protected override async Task OnInitializedAsync()
+    {
+        authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        StateHasChanged(); // Обновляем состояние компонента после получения данных аутентификации
+    }
+}
