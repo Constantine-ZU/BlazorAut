@@ -10,6 +10,7 @@ namespace BlazorAut.Data
         }
 
         public DbSet<AppSetting> AppSettings { get; set; }
+        public DbSet<AuthCode> AuthCodes { get; set; }
     }
 
 }

@@ -21,12 +21,15 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Add AppSettingsService
 builder.Services.AddScoped<AppSettingsService>();
 
-// Load settings from database
 var appSettings = builder.Services.BuildServiceProvider().GetRequiredService<AppSettingsService>().GetAppSettingsAsync().Result;
 
 var secretKey = appSettings["JwtSecretKey"];
 var issuer = appSettings["JwtIssuer"];
 var audience = appSettings["JwtAudience"];
+var smtpServer = appSettings["SmtpServer"];
+var smtpPort = int.Parse(appSettings["SmtpPort"]);
+var smtpUser = appSettings["SmtpUser"];
+var smtpPass = appSettings["SmtpPass"];
 var key = Encoding.UTF8.GetBytes(secretKey);
 
 // Configure JWT
@@ -46,6 +49,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddScoped<JwtService>(provider => new JwtService(secretKey, issuer, audience));
+builder.Services.AddScoped<IEmailService>(provider => new EmailService(smtpServer, smtpPort, smtpUser, smtpPass));
 builder.Services.AddAuthorization();
 
 var app = builder.Build();

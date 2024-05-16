@@ -1,0 +1,107 @@
+﻿@page "/request-code"
+@inject IEmailService EmailService
+@inject NavigationManager Navigation
+@inject BlazorAut.Data.ApplicationDbContext DbContext
+@using System.ComponentModel.DataAnnotations
+@using BlazorAut.Services
+@using BlazorAut.Data
+
+<PageTitle>Request Code</PageTitle>
+
+<h3>Request Code</h3>
+
+@if (!isCodeSent)
+{
+    <EditForm Model="@emailModel" OnValidSubmit="HandleRequestCode">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div>
+            <label>Email:</label>
+            <InputText @bind-Value="emailModel.Email" />
+        </div>
+        <button type="submit">Request Code</button>
+    </EditForm>
+}
+else
+{
+    <EditForm Model="@codeModel" OnValidSubmit="HandleVerifyCode">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div>
+            <label>Enter Code:</label>
+            <InputText @bind-Value="codeModel.Code" />
+        </div>
+        <button type="submit">Verify Code</button>
+    </EditForm>
+}
+
+@code {
+    private EmailModel emailModel = new();
+    private CodeModel codeModel = new();
+    private bool isCodeSent = false;
+
+    public class EmailModel
+    {
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; }
+    }
+
+    public class CodeModel
+    {
+        [Required]
+        public string Code { get; set; }
+    }
+
+    private async Task HandleRequestCode()
+    {
+        var code = GenerateCode();
+        var expiration = DateTime.UtcNow.AddMinutes(15); // Set expiration time
+
+        // Save the code to the database
+        var authCode = new AuthCode
+            {
+                Email = emailModel.Email,
+                Code = code,
+                Expiration = expiration
+            };
+
+        var existingAuthCode = await DbContext.AuthCodes.FindAsync(emailModel.Email);
+        if (existingAuthCode != null)
+        {
+            DbContext.AuthCodes.Remove(existingAuthCode);
+        }
+
+        DbContext.AuthCodes.Add(authCode);
+        await DbContext.SaveChangesAsync();
+
+        await EmailService.SendEmailAsync(emailModel.Email, "Your Code", $"Your code is: {code}");
+        isCodeSent = true;
+        Console.WriteLine($"Code sent to {emailModel.Email}: {code}");
+
+        // Force a re-render to update the UI
+        StateHasChanged();
+    }
+
+    private async Task HandleVerifyCode()
+    {
+        var authCode = await DbContext.AuthCodes.FindAsync(emailModel.Email);
+        if (authCode != null && authCode.Code == codeModel.Code && authCode.Expiration > DateTime.UtcNow)
+        {
+            Console.WriteLine("Code verified successfully");
+            // Here you can set the authentication state or redirect the user
+        }
+        else
+        {
+            Console.WriteLine("Invalid or expired code");
+        }
+    }
+
+    private string GenerateCode()
+    {
+        var random = new Random();
+        return random.Next(100000, 999999).ToString();
+    }
+}
