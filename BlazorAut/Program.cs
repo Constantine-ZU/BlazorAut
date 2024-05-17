@@ -1,12 +1,14 @@
-using BlazorAut.Data;
+﻿using BlazorAut.Data;
 using BlazorAut.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Components.Authorization;
+using Blazored.SessionStorage;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,7 +24,10 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Add AppSettingsService
 builder.Services.AddScoped<AppSettingsService>();
 
-var appSettings = builder.Services.BuildServiceProvider().GetRequiredService<AppSettingsService>().GetAppSettingsAsync().Result;
+// Load app settings from the database
+var serviceProvider = builder.Services.BuildServiceProvider();
+var appSettingsService = serviceProvider.GetRequiredService<AppSettingsService>();
+var appSettings = appSettingsService.GetAppSettingsAsync().Result;
 
 var secretKey = appSettings["JwtSecretKey"];
 var issuer = appSettings["JwtIssuer"];
@@ -51,8 +56,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddScoped<JwtService>(provider => new JwtService(secretKey, issuer, audience));
 builder.Services.AddScoped<IEmailService>(provider => new EmailService(smtpServer, smtpPort, smtpUser, smtpPass));
-builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthenticationStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(provider => new CustomAuthenticationStateProvider(provider.GetRequiredService<ISessionStorageService>(), secretKey));
 builder.Services.AddAuthorizationCore();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddBlazoredSessionStorage(); // Add this line
 
 var app = builder.Build();
 

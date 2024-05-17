@@ -12,10 +12,7 @@
         <div class="top-row px-4">
             <AuthorizeView>
                 <Authorized>
-                    @if (authenticationState != null && authenticationState.User.Identity.IsAuthenticated)
-                    {
-                        <span>Welcome, @authenticationState.User.Identity.Name</span>
-                    }
+                    <a href="/logout">Logout</a>
                 </Authorized>
                 <NotAuthorized>
                     <a href="/request-code">Login</a>
@@ -35,6 +32,14 @@
     protected override async Task OnInitializedAsync()
     {
         authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        StateHasChanged(); // Обновляем состояние компонента после получения данных аутентификации
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            StateHasChanged();
+        }
     }
 }

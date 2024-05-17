@@ -5,6 +5,7 @@
 @using System.ComponentModel.DataAnnotations
 @using BlazorAut.Services
 @using BlazorAut.Data
+@using Microsoft.EntityFrameworkCore
 
 <PageTitle>Request Code</PageTitle>
 
@@ -111,7 +112,7 @@ else
 
     private async Task HandleVerifyCode()
     {
-        var authCode = await DbContext.AuthCodes.FindAsync(emailModel.Email);
+        var authCode = await DbContext.AuthCodes.SingleOrDefaultAsync(ac => ac.Email == emailModel.Email);
         if (authCode != null && authCode.Code == codeModel.Code && authCode.Expiration > DateTime.UtcNow)
         {
             Console.WriteLine("Code verified successfully");
