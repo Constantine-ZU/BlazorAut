@@ -17,15 +17,12 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
-//builder.Services.AddSingleton<WeatherForecastService>();
+builder.Services.AddSingleton<WeatherForecastService>();
 builder.Services.AddBlazoredLocalStorage();
 
 // Add DbContext configuration
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-
-
 
 // Add AppSettingsService
 builder.Services.AddScoped<AppSettingsService>();
@@ -64,19 +61,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddScoped<JwtService>(provider => new JwtService(secretKey, issuer, audience));
 builder.Services.AddScoped<IEmailService>(provider => new EmailService(smtpServer, smtpPort, smtpUser, smtpPass));
-
-
-//builder.Services.AddScoped<AuthenticationStateProvider>(provider => new CustomAuthenticationStateProvider(provider.GetRequiredService<ApplicationDbContext>(), secretKey));
-
-builder.Services.AddScoped<AuthenticationStateProvider>(provider =>
-{
-    var serviceScopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
-    var context = provider.GetRequiredService<ApplicationDbContext>();
-    return new CustomAuthenticationStateProvider(serviceScopeFactory, context, secretKey);
-});
-
-
-
+builder.Services.AddScoped<AuthenticationStateProvider>(provider => new CustomAuthenticationStateProvider(provider.GetRequiredService<ILocalStorageService>(), secretKey));
 builder.Services.AddAuthorizationCore();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddBlazoredSessionStorage(); // Add this line

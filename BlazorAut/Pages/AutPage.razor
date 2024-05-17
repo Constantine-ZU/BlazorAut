@@ -1,48 +1,61 @@
-﻿@page "/request-code"
+﻿@page "/"
 @inject IEmailService EmailService
 @inject BlazorAut.Data.ApplicationDbContext DbContext
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ILocalStorageService LocalStorage
 @using System.ComponentModel.DataAnnotations
 @using BlazorAut.Services
 @using BlazorAut.Data
 @using Microsoft.EntityFrameworkCore
+@using Blazored.LocalStorage
 
 <PageTitle>Request Code</PageTitle>
 
 <h3>Request Code</h3>
 
-@if (!isCodeSent)
-{
-    <EditForm Model="@emailModel" OnValidSubmit="HandleRequestCode">
-        <DataAnnotationsValidator />
-        <ValidationSummary />
-
-        <div>
-            <label>Email:</label>
-            <InputText @bind-Value="emailModel.Email" />
-        </div>
-        <button type="submit">Request Code</button>
-    </EditForm>
-}
-else
-{
-    <EditForm Model="@codeModel" OnValidSubmit="HandleVerifyCode">
-        <DataAnnotationsValidator />
-        <ValidationSummary />
-
-        <div>
-            <label>Enter Code:</label>
-            <InputText @bind-Value="codeModel.Code" />
-        </div>
-        <button type="submit">Verify Code</button>
-    </EditForm>
-}
 
 <div>
     <h4>Authentication State</h4>
     <p>User Identity: @(authenticationState?.User?.Identity?.Name ?? "Anonymous")</p>
     <p>Is Authenticated: @(authenticationState?.User?.Identity?.IsAuthenticated ?? false)</p>
 </div>
+
+@if (authenticationState?.User?.Identity?.IsAuthenticated ?? false)
+{
+    <button @onclick="HandleLogout">Logoff</button>
+}
+else
+{
+    if (!isCodeSent)
+    {
+        <EditForm Model="@emailModel" OnValidSubmit="HandleRequestCode">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div>
+                <label>Email:</label>
+                <InputText @bind-Value="emailModel.Email" />
+            </div>
+            <button type="submit">Request Code</button>
+        </EditForm>
+    }
+    else
+    {
+        <EditForm Model="@codeModel" OnValidSubmit="HandleVerifyCode">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div>
+                <label>Enter Code:</label>
+                <InputText @bind-Value="codeModel.Code" />
+            </div>
+            <button type="submit">Verify Code</button>
+        </EditForm>
+    }
+
+
+}
+
 
 @if (isCodeVerified)
 {
@@ -51,6 +64,7 @@ else
         <p>User Email: @authenticatedEmail</p>
     </div>
 }
+
 
 @code {
     private EmailModel emailModel = new();
@@ -116,7 +130,7 @@ else
         if (authCode != null && authCode.Code == codeModel.Code && authCode.Expiration > DateTime.UtcNow)
         {
             Console.WriteLine("Code verified successfully");
-            ((CustomAuthenticationStateProvider)AuthenticationStateProvider).MarkUserAsAuthenticated(emailModel.Email);
+            await ((CustomAuthenticationStateProvider)AuthenticationStateProvider).MarkUserAsAuthenticated(emailModel.Email);
             authenticatedEmail = emailModel.Email;
             isCodeVerified = true;
             authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
@@ -128,9 +142,19 @@ else
         }
     }
 
+    private async Task HandleLogout()
+    {
+        await ((CustomAuthenticationStateProvider)AuthenticationStateProvider).LogoutAsync();
+        authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        isCodeVerified = false;
+        isCodeSent = false;
+        StateHasChanged(); // Обновить UI
+    }
+
     private string GenerateCode()
     {
         var random = new Random();
-        return random.Next(100000, 999999).ToString();
+        // return random.Next(100000, 999999).ToString();
+        return "000000";
     }
 }

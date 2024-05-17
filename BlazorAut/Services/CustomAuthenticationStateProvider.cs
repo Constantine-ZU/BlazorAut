@@ -1,75 +1,159 @@
-﻿using Microsoft.AspNetCore.Components.Authorization;
+﻿using BlazorAut.Data;
+using Blazored.LocalStorage;
 using Blazored.SessionStorage;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 
-namespace BlazorAut.Services
+public class CustomAuthenticationStateProvider : AuthenticationStateProvider
 {
-    public class CustomAuthenticationStateProvider : AuthenticationStateProvider
+    //private readonly ILocalStorageService _localStorage;
+    private readonly ApplicationDbContext _context;
+    private readonly string _secretKey;
+    private readonly IServiceScopeFactory _serviceScopeFactory;
+
+    //public CustomAuthenticationStateProvider(ILocalStorageService localStorage, string secretKey)
+    //{
+    //    _localStorage = localStorage;
+    //    _secretKey = secretKey;
+    //}
+    public CustomAuthenticationStateProvider(IServiceScopeFactory serviceScopeFactory, ApplicationDbContext context, string secretKey)
     {
-        private readonly ISessionStorageService _sessionStorage;
-        private readonly string _secretKey;
+        _serviceScopeFactory = serviceScopeFactory;
+        _context = context;
+        _secretKey = secretKey;
+    }
 
-        public CustomAuthenticationStateProvider(ISessionStorageService sessionStorage, string secretKey)
+
+
+    public override async Task<AuthenticationState> GetAuthenticationStateAsync()
+    {
+        using (var scope = _serviceScopeFactory.CreateScope())
         {
-            _sessionStorage = sessionStorage;
-            _secretKey = secretKey;
-            Console.WriteLine($"CustomAuthenticationStateProvider initialized with secret key: {_secretKey}");
-        }
+            var scopedContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var identity = new ClaimsIdentity();
+            var token = await scopedContext.UserTokens.OrderByDescending(t => t.CreatedAt).FirstOrDefaultAsync();
 
-        public override async Task<AuthenticationState> GetAuthenticationStateAsync()
-        {
-            // This method needs to be called during or after the OnAfterRenderAsync lifecycle method
-            var token = await _sessionStorage.GetItemAsync<string>("authToken");
-            Console.WriteLine($"GetAuthenticationStateAsync called. Token: {token}");
-
-            if (string.IsNullOrEmpty(token))
+            if (token != null && token.Expiration > DateTime.UtcNow)
             {
-                Console.WriteLine("Token is null or empty. Returning anonymous user.");
-                return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
+                var claims = ParseClaimsFromJwt(token.Token).ToList();
+
+                // Найдем пользователя по UserId, связанному с токеном
+                var user = await scopedContext.Users.SingleOrDefaultAsync(u => u.Id == token.UserId);
+                if (user != null)
+                {
+                    // Добавим claim с именем пользователя
+                    claims.Add(new Claim(ClaimTypes.Name, user.Email));
+                    identity = new ClaimsIdentity(claims, "jwt");
+                }
             }
 
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(_secretKey);
-            var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
+            var userPrincipal = new ClaimsPrincipal(identity);
+            return await Task.FromResult(new AuthenticationState(userPrincipal));
+        }
+    }
+
+
+
+    public async Task MarkUserAsAuthenticated(string email)
+    {
+        var user = await _context.Users.SingleOrDefaultAsync(u => u.Email == email);
+
+        if (user == null)
+        {
+            // Create a new user
+            user = new User
             {
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(key),
-                ValidateIssuer = false,
-                ValidateAudience = false
-            }, out _);
+                Email = email,
+                Tokens = new List<UserToken>()
+            };
 
-            var identity = (ClaimsIdentity)principal.Identity;
-            Console.WriteLine($"User authenticated: {identity.Name}");
-            return new AuthenticationState(principal);
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
         }
 
-        public async Task MarkUserAsAuthenticated(string email)
+        // Generate JWT token
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var key = Encoding.ASCII.GetBytes(_secretKey);
+        var tokenDescriptor = new SecurityTokenDescriptor
         {
-            var claims = new[] { new Claim(ClaimTypes.Name, email) };
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secretKey));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-            var token = new JwtSecurityToken(
-                claims: claims,
-                expires: DateTime.Now.AddDays(1),
-                signingCredentials: creds);
+            Subject = new ClaimsIdentity(new Claim[]
+            {
+            new Claim(ClaimTypes.Name, email)
+            }),
+            Expires = DateTime.UtcNow.AddDays(7),
+            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+        };
+        var token = tokenHandler.CreateToken(tokenDescriptor);
+        var tokenString = tokenHandler.WriteToken(token);
 
-            var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
-            await _sessionStorage.SetItemAsync("authToken", tokenString);
-            Console.WriteLine($"MarkUserAsAuthenticated called for email: {email}");
-            Console.WriteLine($"Generated JWT token: {tokenString}");
+        // Save or update the token in the database
+        var userToken = await _context.UserTokens.SingleOrDefaultAsync(ut => ut.UserId == user.Id);
 
-            var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(claims, "jwtAuthType"));
-            NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(authenticatedUser)));
-        }
-
-        public async Task MarkUserAsLoggedOut()
+        if (userToken == null)
         {
-            await _sessionStorage.RemoveItemAsync("authToken");
-            var anonymousUser = new ClaimsPrincipal(new ClaimsIdentity());
-            NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(anonymousUser)));
+            userToken = new UserToken
+            {
+                UserId = user.Id,
+                Token = tokenString,
+                Expiration = tokenDescriptor.Expires.Value,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.UserTokens.Add(userToken);
         }
+        else
+        {
+            userToken.Token = tokenString;
+            userToken.Expiration = tokenDescriptor.Expires.Value;
+            userToken.CreatedAt = DateTime.UtcNow;
+
+            _context.UserTokens.Update(userToken);
+        }
+
+        await _context.SaveChangesAsync();
+
+        // Notify the authentication state provider
+        NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+    }
+    public async Task LogoutAsync()
+    {
+        var token = await _context.UserTokens.OrderByDescending(t => t.CreatedAt).FirstOrDefaultAsync();
+        if (token != null)
+        {
+            _context.UserTokens.Remove(token);
+            await _context.SaveChangesAsync();
+        }
+
+        var identity = new ClaimsIdentity();
+        var user = new ClaimsPrincipal(identity);
+        NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(user)));
+    }
+
+
+    private string GenerateJwtToken(string email)
+    {
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var key = Encoding.ASCII.GetBytes(_secretKey);
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, email) }),
+            Expires = DateTime.UtcNow.AddHours(1),
+            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+        };
+
+        var token = tokenHandler.CreateToken(tokenDescriptor);
+        return tokenHandler.WriteToken(token);
+    }
+
+    private IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
+    {
+        var handler = new JwtSecurityTokenHandler();
+        var jsonToken = handler.ReadToken(jwt) as JwtSecurityToken;
+        return jsonToken?.Claims;
     }
 }
