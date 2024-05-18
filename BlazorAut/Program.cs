@@ -11,8 +11,33 @@ using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Blazored.LocalStorage;
 using Microsoft.Extensions.Configuration;
+using System.Runtime.InteropServices;
 
 var builder = WebApplication.CreateBuilder(args);
+
+
+string pfxFilePath = "";
+
+if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+{
+    pfxFilePath = @"C:\Users\1\source\repos\cert_webapi_pan4_com\webaws_pam4_com.pfx";
+}
+else
+{
+    pfxFilePath = "/etc/ssl/certs/webaws_pam4_com.pfx";
+}
+
+
+//  Kestrel for HTTPS
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.ListenAnyIP(80);
+    serverOptions.ListenAnyIP(443, listenOptions =>
+    {
+        listenOptions.UseHttps(pfxFilePath, "qaz123");
+    });
+});
+
 
 // Add services to the container.
 builder.Services.AddRazorPages();
@@ -43,6 +68,7 @@ var smtpPort = int.Parse(appSettings["SmtpPort"]);
 var smtpUser = appSettings["SmtpUser"];
 var smtpPass = appSettings["SmtpPass"];
 var key = Encoding.UTF8.GetBytes(secretKey);
+var tokenExpirationDays = int.Parse(appSettings["TokenExpirationDays"]);
 
 // Configure JWT
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -72,7 +98,7 @@ builder.Services.AddScoped<AuthenticationStateProvider>(provider =>
 {
     var serviceScopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
     var context = provider.GetRequiredService<ApplicationDbContext>();
-    return new CustomAuthenticationStateProvider(serviceScopeFactory, context, secretKey);
+    return new CustomAuthenticationStateProvider(serviceScopeFactory, context, secretKey, tokenExpirationDays);
 });
 
 
@@ -80,6 +106,7 @@ builder.Services.AddScoped<AuthenticationStateProvider>(provider =>
 builder.Services.AddAuthorizationCore();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddBlazoredSessionStorage(); // Add this line
+builder.Services.AddScoped<DbServerInfoService>();
 
 var app = builder.Build();
 
@@ -89,6 +116,7 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error");
 }
 
+app.UseMiddleware<ClientInfoMiddleware>();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();

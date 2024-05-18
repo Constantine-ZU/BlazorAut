@@ -1,9 +1,69 @@
 ﻿@page "/index"
-
+@inject IHttpContextAccessor HttpContextAccessor
 <PageTitle>Index</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>Blazor for AWS test</h1>
 
-Welcome to your new app.
+<h3>Client and Server Information:</h3>
+<p><b>Server Name:</b> @ServerName</p>
+<p><b>Client IP:</b> @ClientIp</p>
+<p><b>X-Forwarded-For Header:</b> @IpFromXForwarded</p>
+<p><b>Client User-Agent:</b> @UserAgent</p>
+<p><b>OS Version:</b> @OSVersion</p>
+<p><b>OS Description:</b> @OSDescription</p>
+<p><b>OS Architecture:</b> @OSArchitecture</p>
+<p><b>Current Working Directory:</b> @CurrentDirectory</p>
+<p><b>Processor Count:</b> @ProcessorCount</p>
+<p><b>System Directory:</b> @SystemDirectory</p>
+<p><b>Logical Drives:</b> @LogicalDrives</p>
+<p><b>System Page Size:</b> @SystemPageSize</p>
+<p><b>User Domain Name:</b> @UserDomainName</p>
+<p><b>User Name:</b> @UserName</p>
+<p><b>Is 64-Bit OS:</b> @Is64BitOs</p>
+<p><b>Is 64-Bit Process:</b> @Is64BitProcess</p>
+<p><b>CLR Version:</b> @ClrVersion</p>
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+@code {
+    private string? ServerName { get; set; }
+    private string? ClientIp { get; set; }
+    private string? UserAgent { get; set; }
+    private string? OSVersion { get; set; }
+    private string? OSDescription { get; set; }
+    private string? OSArchitecture { get; set; }
+    private string? CurrentDirectory { get; set; }
+    private string? ProcessorCount { get; set; }
+    private string? SystemDirectory { get; set; }
+    private string? LogicalDrives { get; set; }
+    private string? SystemPageSize { get; set; }
+    private string? UserDomainName { get; set; }
+    private string? UserName { get; set; }
+    private string? Is64BitOs { get; set; }
+    private string? Is64BitProcess { get; set; }
+    private string? ClrVersion { get; set; }
+    private string? IpFromXForwarded { get; set; }
+
+    protected override void OnInitialized()
+    {
+        var httpContext = HttpContextAccessor.HttpContext;
+        if (httpContext != null)
+        {
+            ServerName = httpContext.Items["ServerName"] as string;
+            ClientIp = httpContext.Items["ClientIp"] as string;
+            UserAgent = httpContext.Items["UserAgent"] as string;
+            OSVersion = httpContext.Items["OSVersion"] as string;
+            OSDescription = httpContext.Items["OSDescription"] as string;
+            OSArchitecture = httpContext.Items["OSArchitecture"] as string;
+            CurrentDirectory = httpContext.Items["CurrentDirectory"] as string;
+            ProcessorCount = httpContext.Items["ProcessorCount"] as string;
+            SystemDirectory = httpContext.Items["SystemDirectory"] as string;
+            LogicalDrives = httpContext.Items["LogicalDrives"] as string;
+            SystemPageSize = httpContext.Items["SystemPageSize"] as string;
+            UserDomainName = httpContext.Items["UserDomainName"] as string;
+            UserName = httpContext.Items["UserName"] as string;
+            Is64BitOs = httpContext.Items["Is64BitOs"] as string;
+            Is64BitProcess = httpContext.Items["Is64BitProcess"] as string;
+            ClrVersion = httpContext.Items["ClrVersion"] as string;
+            IpFromXForwarded = httpContext.Items["IpFromXForwarded"] as string;
+        }
+    }
+}

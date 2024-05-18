@@ -1,5 +1,6 @@
 ﻿@inherits LayoutComponentBase
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
 
 <PageTitle>BlazorAut</PageTitle>
 
@@ -12,10 +13,14 @@
         <div class="top-row px-4">
             <AuthorizeView>
                 <Authorized>
-                    <a href="/logout">Logout</a>
+                    <p>Addres: @Navigation.Uri User: @(authenticationState?.User?.Identity?.Name ?? "Anonymous")  <a href="javascript:void(0)" @onclick="Logout">Logout</a> </p>
                 </Authorized>
                 <NotAuthorized>
-                    <a href="/request-code">Login</a>
+                    <p>Addres: @Navigation.Uri  Please Login</p>
+                    @if (!string.IsNullOrEmpty(Navigation.ToBaseRelativePath(Navigation.Uri)))
+                    {
+                        Navigation.NavigateTo("/");
+                    }
                 </NotAuthorized>
             </AuthorizeView>
         </div>
@@ -28,18 +33,51 @@
 
 @code {
     private AuthenticationState authenticationState;
+    private bool isAuthenticated;
+    private string curentUrl;
 
     protected override async Task OnInitializedAsync()
     {
-        authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+         authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        Console.WriteLine($"user: {(authenticationState?.User?.Identity?.Name ?? "Anonymous")}");
+
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+      protected override async Task OnParametersSetAsync()
     {
-        if (firstRender)
-        {
-            authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-            StateHasChanged();
-        }
+        authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        Console.WriteLine($"Parameters set - user: {(authenticationState?.User?.Identity?.Name ?? "Anonymous")}");
     }
+
+    private async Task Logout()
+    {
+        if (AuthenticationStateProvider is CustomAuthenticationStateProvider customAuthProvider)
+        {
+            await customAuthProvider.LogoutAsync();
+            Navigation.NavigateTo("/logout", true);
+
+        }
+
+    }
+
+    private void HandleLocationChanged(object sender, LocationChangedEventArgs e)
+    {
+    
+        // rerender component
+        StateHasChanged();
+    }
+
+    protected override void OnInitialized()
+    {
+        // add to the NavigationManager event
+        Navigation.LocationChanged += HandleLocationChanged;
+
+    }
+
+    public void Dispose()
+    {
+        // remove from the NavigationManager event
+        Navigation.LocationChanged -= HandleLocationChanged;
+    }
+
 }

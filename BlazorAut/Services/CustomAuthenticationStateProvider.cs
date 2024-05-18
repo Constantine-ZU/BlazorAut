@@ -11,21 +11,17 @@ using System.Text;
 
 public class CustomAuthenticationStateProvider : AuthenticationStateProvider
 {
-    //private readonly ILocalStorageService _localStorage;
-    private readonly ApplicationDbContext _context;
+     private readonly ApplicationDbContext _context;
     private readonly string _secretKey;
     private readonly IServiceScopeFactory _serviceScopeFactory;
+    private readonly int _tokenExpirationDays;
 
-    //public CustomAuthenticationStateProvider(ILocalStorageService localStorage, string secretKey)
-    //{
-    //    _localStorage = localStorage;
-    //    _secretKey = secretKey;
-    //}
-    public CustomAuthenticationStateProvider(IServiceScopeFactory serviceScopeFactory, ApplicationDbContext context, string secretKey)
+    public CustomAuthenticationStateProvider(IServiceScopeFactory serviceScopeFactory, ApplicationDbContext context, string secretKey, int tokenExpirationDays)
     {
         _serviceScopeFactory = serviceScopeFactory;
         _context = context;
         _secretKey = secretKey;
+        _tokenExpirationDays = tokenExpirationDays;
     }
 
 
@@ -42,11 +38,11 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
             {
                 var claims = ParseClaimsFromJwt(token.Token).ToList();
 
-                // Найдем пользователя по UserId, связанному с токеном
+               
                 var user = await scopedContext.Users.SingleOrDefaultAsync(u => u.Id == token.UserId);
                 if (user != null)
                 {
-                    // Добавим claim с именем пользователя
+                   
                     claims.Add(new Claim(ClaimTypes.Name, user.Email));
                     identity = new ClaimsIdentity(claims, "jwt");
                 }
@@ -85,7 +81,7 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
             {
             new Claim(ClaimTypes.Name, email)
             }),
-            Expires = DateTime.UtcNow.AddDays(7),
+            Expires = DateTime.UtcNow.AddDays(_tokenExpirationDays),
             SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
         };
         var token = tokenHandler.CreateToken(tokenDescriptor);

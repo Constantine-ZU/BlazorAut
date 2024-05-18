@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using BlazorAut.Pages;
+using BlazorAut.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace BlazorAut.Data
 {
@@ -13,7 +15,7 @@ namespace BlazorAut.Data
         public DbSet<AuthCode> AuthCodes { get; set; }
         public DbSet<User> Users { get; set; }
         public DbSet<UserToken> UserTokens { get; set; }
-
+        public DbSet<DbServerInfo> DbServerInfo { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -21,6 +23,8 @@ namespace BlazorAut.Data
                 .HasOne(ut => ut.User)
                 .WithMany(u => u.Tokens)
                 .HasForeignKey(ut => ut.UserId);
+            modelBuilder.Entity<DbServerInfo>()
+                .HasNoKey();
         }
     }
 

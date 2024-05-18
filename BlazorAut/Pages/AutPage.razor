@@ -13,8 +13,7 @@
 
 <h3>Request Code</h3>
 
-
-<div>
+<div class="authentication-state">
     <h4>Authentication State</h4>
     <p>User Identity: @(authenticationState?.User?.Identity?.Name ?? "Anonymous")</p>
     <p>Is Authenticated: @(authenticationState?.User?.Identity?.IsAuthenticated ?? false)</p>
@@ -22,49 +21,49 @@
 
 @if (authenticationState?.User?.Identity?.IsAuthenticated ?? false)
 {
-    <button @onclick="HandleLogout">Logoff</button>
+    <button @onclick="HandleLogout" class="btn btn-primary">Logoff</button>
 }
 else
 {
     if (!isCodeSent)
     {
-        <EditForm Model="@emailModel" OnValidSubmit="HandleRequestCode">
+        <EditForm Model="@emailModel" OnValidSubmit="HandleRequestCode" class="form-group">
             <DataAnnotationsValidator />
             <ValidationSummary />
 
-            <div>
+            <div class="form-group">
                 <label>Email:</label>
-                <InputText @bind-Value="emailModel.Email" />
+                <InputText @bind-Value="emailModel.Email" class="form-control" />
             </div>
-            <button type="submit">Request Code</button>
+            <button type="submit" class="btn btn-primary">Request Code</button>
+          
         </EditForm>
     }
     else
     {
-        <EditForm Model="@codeModel" OnValidSubmit="HandleVerifyCode">
+        <EditForm Model="@codeModel" OnValidSubmit="HandleVerifyCode" class="form-group">
             <DataAnnotationsValidator />
             <ValidationSummary />
 
-            <div>
+            <div class="form-group">
                 <label>Enter Code:</label>
-                <InputText @bind-Value="codeModel.Code" />
+                <InputText @bind-Value="codeModel.Code" class="form-control" />
             </div>
-            <button type="submit">Verify Code</button>
+            <button type="submit" class="btn btn-primary">Verify Code</button>
+            <div class="alert alert-info mt-2">
+                For debug reasons, please use code 000000. The mail service has not been implemented yet.
+            </div>
         </EditForm>
     }
-
-
 }
-
 
 @if (isCodeVerified)
 {
-    <div>
+    <div class="alert alert-success mt-3">
         <p>Code verified successfully</p>
         <p>User Email: @authenticatedEmail</p>
     </div>
 }
-
 
 @code {
     private EmailModel emailModel = new();
