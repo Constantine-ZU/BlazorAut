@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.JSInterop;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -14,14 +15,19 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
      private readonly ApplicationDbContext _context;
     private readonly string _secretKey;
     private readonly IServiceScopeFactory _serviceScopeFactory;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly int _tokenExpirationDays;
+    private readonly IJSRuntime _jsRuntime;
 
-    public CustomAuthenticationStateProvider(IServiceScopeFactory serviceScopeFactory, ApplicationDbContext context, string secretKey, int tokenExpirationDays)
+    public CustomAuthenticationStateProvider(IServiceScopeFactory serviceScopeFactory, ApplicationDbContext context, IHttpContextAccessor httpContextAccessor,
+       IJSRuntime iJSRuntime, string secretKey, int tokenExpirationDays)
     {
         _serviceScopeFactory = serviceScopeFactory;
         _context = context;
         _secretKey = secretKey;
         _tokenExpirationDays = tokenExpirationDays;
+        _httpContextAccessor= httpContextAccessor;
+        _jsRuntime = iJSRuntime;
     }
 
 
@@ -32,7 +38,14 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
         {
             var scopedContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             var identity = new ClaimsIdentity();
-            var token = await scopedContext.UserTokens.OrderByDescending(t => t.CreatedAt).FirstOrDefaultAsync();
+            // var token = await scopedContext.UserTokens.OrderByDescending(t => t.CreatedAt).FirstOrDefaultAsync();
+            var tokenFromCookies = _httpContextAccessor.HttpContext.Request.Cookies["Kticket000"];
+
+            // Используем токен из cookies для поиска в базе данных
+            var token = await scopedContext.UserTokens
+                            .Where(t => t.Token == tokenFromCookies)
+                            .OrderByDescending(t => t.CreatedAt)
+                            .FirstOrDefaultAsync();
 
             if (token != null && token.Expiration > DateTime.UtcNow)
             {
@@ -113,7 +126,18 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
 
         await _context.SaveChangesAsync();
 
-        // Notify the authentication state provider
+        
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Expires = tokenDescriptor.Expires,
+            Secure = true,
+            SameSite = SameSiteMode.Strict
+        };
+        await _jsRuntime.InvokeVoidAsync("setCookie", "Kticket000", tokenString, _tokenExpirationDays);
+       // _httpContextAccessor.HttpContext.Response.Cookies.Append("Kticket000", tokenString, cookieOptions);
+
+       
         NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
     }
     public async Task LogoutAsync()

@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Blazored.LocalStorage;
 using Microsoft.Extensions.Configuration;
 using System.Runtime.InteropServices;
+using Microsoft.JSInterop;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -94,11 +95,14 @@ builder.Services.AddScoped<IEmailService>(provider => new EmailService(smtpServe
 
 //builder.Services.AddScoped<AuthenticationStateProvider>(provider => new CustomAuthenticationStateProvider(provider.GetRequiredService<ApplicationDbContext>(), secretKey));
 
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<AuthenticationStateProvider>(provider =>
 {
     var serviceScopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
     var context = provider.GetRequiredService<ApplicationDbContext>();
-    return new CustomAuthenticationStateProvider(serviceScopeFactory, context, secretKey, tokenExpirationDays);
+    var httpContextAccessor = provider.GetRequiredService<IHttpContextAccessor>();
+    var jsRuntime = provider.GetRequiredService<IJSRuntime>();
+    return new CustomAuthenticationStateProvider(serviceScopeFactory, context, httpContextAccessor, jsRuntime, secretKey, tokenExpirationDays);
 });
 
 
