@@ -3,6 +3,7 @@
 @inject BlazorAut.Data.ApplicationDbContext DbContext
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ILocalStorageService LocalStorage
+@inject NavigationManager NavigationManager
 @using System.ComponentModel.DataAnnotations
 @using BlazorAut.Services
 @using BlazorAut.Data
@@ -134,6 +135,7 @@ else
             isCodeVerified = true;
             authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
             StateHasChanged(); // Force a re-render to update the UI
+            NavigationManager.NavigateTo("/", forceLoad: true);
         }
         else
         {

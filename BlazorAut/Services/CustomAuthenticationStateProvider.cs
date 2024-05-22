@@ -1,6 +1,7 @@
 ﻿using BlazorAut.Data;
 using Blazored.LocalStorage;
 using Blazored.SessionStorage;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,8 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly int _tokenExpirationDays;
     private readonly IJSRuntime _jsRuntime;
+    private readonly DotNetObjectReference<CustomAuthenticationStateProvider> _dotNetRef;
+
 
     public CustomAuthenticationStateProvider(IServiceScopeFactory serviceScopeFactory, ApplicationDbContext context, IHttpContextAccessor httpContextAccessor,
        IJSRuntime iJSRuntime, string secretKey, int tokenExpirationDays)
@@ -28,6 +31,7 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
         _tokenExpirationDays = tokenExpirationDays;
         _httpContextAccessor= httpContextAccessor;
         _jsRuntime = iJSRuntime;
+        _dotNetRef = DotNetObjectReference.Create(this);
     }
 
 
@@ -39,28 +43,33 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
             var scopedContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             var identity = new ClaimsIdentity();
             // var token = await scopedContext.UserTokens.OrderByDescending(t => t.CreatedAt).FirstOrDefaultAsync();
-            var tokenFromCookies = _httpContextAccessor.HttpContext.Request.Cookies["Kticket000"];
+            var tokenFromCookies = _httpContextAccessor.HttpContext.Request.Cookies.TryGetValue("Kticket000", out var cookieValue) ?  cookieValue : null;
 
-            // Используем токен из cookies для поиска в базе данных
-            var token = await scopedContext.UserTokens
-                            .Where(t => t.Token == tokenFromCookies)
-                            .OrderByDescending(t => t.CreatedAt)
-                            .FirstOrDefaultAsync();
 
-            if (token != null && token.Expiration > DateTime.UtcNow)
+            if (!string.IsNullOrEmpty(tokenFromCookies))
             {
-                var claims = ParseClaimsFromJwt(token.Token).ToList();
 
-               
-                var user = await scopedContext.Users.SingleOrDefaultAsync(u => u.Id == token.UserId);
-                if (user != null)
+
+                // Используем токен из cookies для поиска в базе данных
+                var token = await scopedContext.UserTokens
+                                .Where(t => t.Token == tokenFromCookies)
+                                .OrderByDescending(t => t.CreatedAt)
+                                .FirstOrDefaultAsync();
+
+                if (token != null && token.Expiration > DateTime.UtcNow)
                 {
-                   
-                    claims.Add(new Claim(ClaimTypes.Name, user.Email));
-                    identity = new ClaimsIdentity(claims, "jwt");
+                    var claims = ParseClaimsFromJwt(token.Token).ToList();
+
+
+                    var user = await scopedContext.Users.SingleOrDefaultAsync(u => u.Id == token.UserId);
+                    if (user != null)
+                    {
+
+                        claims.Add(new Claim(ClaimTypes.Name, user.Email));
+                        identity = new ClaimsIdentity(claims, "jwt");
+                    }
                 }
             }
-
             var userPrincipal = new ClaimsPrincipal(identity);
             return await Task.FromResult(new AuthenticationState(userPrincipal));
         }
@@ -134,11 +143,19 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
             Secure = true,
             SameSite = SameSiteMode.Strict
         };
-        await _jsRuntime.InvokeVoidAsync("setCookie", "Kticket000", tokenString, _tokenExpirationDays);
-       // _httpContextAccessor.HttpContext.Response.Cookies.Append("Kticket000", tokenString, cookieOptions);
+        //var dotNetHelper = DotNetObjectReference.Create(this);
+        await _jsRuntime.InvokeVoidAsync("setCookie", "Kticket000", tokenString, _tokenExpirationDays, _dotNetRef);
+        // _httpContextAccessor.HttpContext.Response.Cookies.Append("Kticket000", tokenString, cookieOptions);
 
-       
+
+        //NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+    }
+
+    [JSInvokable]
+    public async Task RefreshAuthenticationState()
+    {
         NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+      
     }
     public async Task LogoutAsync()
     {
@@ -155,25 +172,29 @@ public class CustomAuthenticationStateProvider : AuthenticationStateProvider
     }
 
 
-    private string GenerateJwtToken(string email)
-    {
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.ASCII.GetBytes(_secretKey);
-        var tokenDescriptor = new SecurityTokenDescriptor
-        {
-            Subject = new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, email) }),
-            Expires = DateTime.UtcNow.AddHours(1),
-            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-        };
+    //private string GenerateJwtToken(string email)
+    //{
+    //    var tokenHandler = new JwtSecurityTokenHandler();
+    //    var key = Encoding.ASCII.GetBytes(_secretKey);
+    //    var tokenDescriptor = new SecurityTokenDescriptor
+    //    {
+    //        Subject = new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, email) }),
+    //        Expires = DateTime.UtcNow.AddHours(1),
+    //        SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+    //    };
 
-        var token = tokenHandler.CreateToken(tokenDescriptor);
-        return tokenHandler.WriteToken(token);
-    }
+    //    var token = tokenHandler.CreateToken(tokenDescriptor);
+    //    return tokenHandler.WriteToken(token);
+    //}
 
     private IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
     {
         var handler = new JwtSecurityTokenHandler();
         var jsonToken = handler.ReadToken(jwt) as JwtSecurityToken;
         return jsonToken?.Claims;
+    }
+    public void Dispose()
+    {
+        _dotNetRef.Dispose();
     }
 }

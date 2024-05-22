@@ -1,4 +1,4 @@
-function setCookie(name, value, days) {
+function setCookie(name, value, days, dotNetHelper) {
     var expires = "";
     if (days) {
         var date = new Date();
@@ -6,4 +6,6 @@ function setCookie(name, value, days) {
         expires = "; expires=" + date.toUTCString();
     }
     document.cookie = name + "=" + (value || "") + expires + "; path=/; samesite=strict; secure";
+
+    dotNetHelper.invokeMethodAsync('RefreshAuthenticationState');
 }
